@@ -1,2 +1,3 @@
 # covid_google_dscc19
-repo for DSCC19 conference submission
+
+pdw's repo for DSCC19 conference paper, "Detecting Communities in and the Evolutionary Structure of Google Search Trends Related to COVID-19"
