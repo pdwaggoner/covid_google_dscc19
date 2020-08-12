@@ -1,20 +1,18 @@
-# load old gtrendsR (1.4.5) first, then load the library
+# Philip Waggoner (pdwaggoner@uchicago.edu)
+# Replication code for DSCC19 paper, "Detecting Communities in and the Evolutionary Structure of Google Search Trends Related to COVID-19"
+
+# first, load some libraries for data collection, EDA, and munging
 library(tidyverse)
 library(devtools)
-#install_version("gtrendsR", version = "1.4.5")
+#install_version("gtrendsR", version = "1.4.5") # might need if plots look wonky
 library(gtrendsR)
 
-
-# Process:
-#   1. Show full trend of relative interest via Google searches for "coronavirus"
-
-# create new data frame
+# create df of search
 covid_trends <- gtrends(keyword = "coronavirus", 
                         geo = "US", 
                         gprop = "web",
-                        time = "2019-12-01 2020-07-30")[[1]] %>% 
+                        time = "2019-12-01 2020-08-11")[[1]] %>% 
   mutate(hits = replace(hits, hits < 0, 0)) 
-
 
 # viz
 covid_trends %>% 
@@ -24,18 +22,16 @@ covid_trends %>%
              col = keyword)) +
   geom_line() + 
   labs(title = "Google Trends Web Searches for 'coronavirus'", 
-       subtitle = "December 2019 - July 2020", 
+       subtitle = "December 2019 - August 2020", 
        x = "Time", 
        y = "Relative Interest") +
   theme_minimal()
 
-#   2. Show choropleths of US in relative interest by month (start with 1-16-2020; first search)
-
-# first, run the original search (and don't store as DF), but for our narrower time window
+# original search (not a df)
 covid_trends_narrow <- gtrends(keyword = "coronavirus", 
                                                geo = "US", 
                                                gprop = "web",
-                                               time = "2019-01-16 2020-07-30")
+                                               time = "2019-01-16 2020-08-11")
 
 # get state polygon coordinates from the maps library
 library(maps)
@@ -64,17 +60,12 @@ ggplot() +
   scale_fill_continuous(low = '#cbcaca', # my favorite shade of gray
                         high = '#013364') + # my favorite shade of blue
   labs(title = "Relative Interest in 'coronavirus' by State",
-       subtitle = "Google Trends Web Searches, Jan 16, 2020 - July 30, 2020",
+       subtitle = "Google Trends Web Searches, Jan 16, 2020 - August 11, 2020",
        fill = "Relative\nInterest") +
   theme_void() 
 
 
-
-# THUS, interested in the dynamics of how people's views of coronavirus/COVID changed over the short course of the virus (7 month window here). Changes are considered here as changes in network topology of RELATED QUERIES with the constant base query "coronavirus" (especially as COVID-19 cropped up later; coronavirus has been more constant)
-
-
-#   3. Quant analysis --> first gather data: search in 7-day chunks of time and then store the related queries (things they also searched for) in individual tibbles; then rbind full set for mining
-
+## create and munge some dfs
 # selected start of 01-16-2020, as no other searches with "coronavirus" appeared in the US prior to this date
 
 set.seed(1234)
@@ -332,13 +323,23 @@ q_7_29 <- c_7_29$related_queries %>%
   mutate(week = 28)
 
 ## july 30 - august 5
-#c_8_5<- gtrends(keyword = "coronavirus", 
-#                  geo = "US", 
-#                  time = "2020-07-30 2020-08-05") 
-#
-#q_8_5 <- c_8_5$related_queries %>%
-#  as_tibble() %>% 
-#  mutate(week = 29)
+c_8_5 <- gtrends(keyword = "coronavirus", 
+                  geo = "US", 
+                  time = "2020-07-30 2020-08-05") 
+
+q_8_5 <- c_8_5$related_queries %>%
+  as_tibble() %>% 
+  mutate(week = 29)
+
+## august 6 - august 11
+c_8_11 <- gtrends(keyword = "coronavirus", 
+                geo = "US", 
+                time = "2020-08-06 2020-08-11") 
+
+q_8_11 <- c_8_11$related_queries %>%
+  as_tibble() %>% 
+  mutate(week = 30)
+
 
 # full set
 full <- rbind(q_1_22, q_1_29, 
@@ -347,7 +348,8 @@ full <- rbind(q_1_22, q_1_29,
               q_4_1, q_4_8, q_4_15, q_4_22, q_4_29,
               q_5_6, q_5_13, q_5_20, q_5_27,
               q_6_3, q_6_10, q_6_17, q_6_24,
-              q_7_1, q_7_8, q_7_15, q_7_22, q_7_29)
+              q_7_1, q_7_8, q_7_15, q_7_22, q_7_29,
+              q_8_5, q_8_11)
 
 # create month feature 
 full <- full %>% 
@@ -357,19 +359,18 @@ full <- full %>%
                            week == 11 ~ 4, week == 12 ~ 4, week == 13 ~ 4, week == 14 ~ 4, week == 15 ~ 4,
                            week == 16 ~ 5, week == 17 ~ 5, week == 18 ~ 5, week == 19 ~ 5,
                            week == 20 ~ 6, week == 21 ~ 6, week == 22 ~ 6, week == 23 ~ 6,
-                           week == 24 ~ 7, week == 25 ~ 7, week == 26 ~ 7, week == 27 ~ 7, week == 28 ~ 7)
+                           week == 24 ~ 7, week == 25 ~ 7, week == 26 ~ 7, week == 27 ~ 7, week == 28 ~ 7,
+                           week == 29 ~ 8, week == 30 ~ 8)
   )
 
 
-# load some library for networks adn text processing
+# load some libraries for networks and text processing
 library(tm)
 library(skimr)
 library(igraph)
 library(here)
 
 theme_set(theme_minimal())
-
-# do the following first for each month; THEN for the whole set at the end with color and community detection for the whole set
 
 month1 <- full %>% 
   filter(month == 1)
@@ -392,18 +393,19 @@ month6 <- full %>%
 month7 <- full %>% 
   filter(month == 7)
 
+month8 <- full %>% 
+  filter(month == 8)
 
-# start network modeling
+# start network and CD modeling
 set.seed(1234)
 
-# Build corpus and clean a bit
+# clean
 { 
-  corpus <- iconv(month7$value, # only need to change the "month*"; then run all subsequent code
+  corpus <- iconv(month7$value, # only need to change the "month*"
                   to = "utf-8-mac")
   corpus <- Corpus(VectorSource(corpus))
   corpus <- tm_map(corpus, tolower)
   corpus <- tm_map(corpus, removePunctuation)
-  #corpus <- tm_map(corpus, removeNumbers)
   cleanset <- tm_map(corpus, removeWords, stopwords('english'))
   for (j in seq(cleanset)) {
     cleanset[[j]] <- gsub("and", " ", cleanset[[j]]) 
@@ -416,28 +418,23 @@ tdm <- TermDocumentMatrix(cleanset)
 tdm <- as.matrix(tdm)
 
 # inspect first 10 rows and first 10 columns
-tdm[1:10,1:10] # numbers are how many times the term/word appeared in each tweet
-#tdm <- tdm[rowSums(tdm) > 50, ] # reduce size of the space to keep terms that show up at least X number of times across all tweets to make a more interpretable network (below) - if don't do this row, then it will be a very busy/messy network that's hard to read - further, we are only looking at more frequently occurring terms suggesting greater importance
+tdm[1:10,1:10] 
 
-# Network of terms
-# some times val more than 1 because it appeared multiple times in a single tweet
 # convert to only boolean
 tdm[tdm > 1] <- 1 
-
-termM <- tdm %*% t(tdm) # term-term matrix - each term is on rows and columns - to show combinations of words in different tweets; this takes some time
-termM[1:10,1:10]
+termM <- tdm %*% t(tdm) 
 
 # build the graph for month 1
 g_month1 <- graph.adjacency(termM, 
                      weighted = TRUE, 
-                     mode = "undirected") # don't specify the direction from node to node
+                     mode = "undirected") 
 g_month1 <- simplify(g_month1)
 
-# labels: V = vertices --> indicate label to be the name
+# labels
 V(g_month1)$label <- V(g_month1)$name
 V(g_month1)$label
 
-V(g_month1)$degree <- degree(g_month1) # number of connections between terms - how often each term combination has appeared
+V(g_month1)$degree <- degree(g_month1) 
 V(g_month1)$degree
 
 
@@ -526,9 +523,22 @@ V(g_month7)$degree <- degree(g_month7)
 V(g_month7)$degree
 
 
+# build the graph for month 8
+g_month8 <- graph.adjacency(termM, 
+                            weighted = TRUE, 
+                            mode = "undirected") 
+g_month8 <- simplify(g_month8)
+
+# labels
+V(g_month8)$label <- V(g_month8)$name
+V(g_month8)$label
+
+V(g_month8)$degree <- degree(g_month8) 
+V(g_month8)$degree
+
 
 #
-# plot with node importance
+# plot months with node importance
 #par(mfrow = c(4,2))
 
 ## jan
@@ -587,6 +597,13 @@ plot(g_month7,
      vertex.label.dist = 1.5,
      main = "July")
 
+## august
+V(g_month8)$label.cex <- 2.2*V(g_month8)$degree / max(V(g_month8)$degree) + 0.6
+plot(g_month8,
+     vertex.color = "dark gray",
+     vertex.size = 2,
+     vertex.label.dist = 1.5,
+     main = "August")
 
 #par(mfrow = c(1,1))
 
@@ -597,14 +614,13 @@ plot(g_month7,
 # everything below for full set
 #
 
-# Build FULLcorpus and clean a bit
+# clean
 { 
-  corpus <- iconv(full$value, # only need to change the "month*"; then run all subsequent code
+  corpus <- iconv(full$value, 
                   to = "utf-8-mac")
   corpus <- Corpus(VectorSource(corpus))
   corpus <- tm_map(corpus, tolower)
   corpus <- tm_map(corpus, removePunctuation)
-  #corpus <- tm_map(corpus, removeNumbers)
   cleanset <- tm_map(corpus, removeWords, stopwords('english'))
   for (j in seq(cleanset)) {
     cleanset[[j]] <- gsub("and", " ", cleanset[[j]]) 
@@ -617,32 +633,28 @@ tdm <- TermDocumentMatrix(cleanset)
 tdm <- as.matrix(tdm)
 
 # inspect first 10 rows and first 10 columns
-tdm[1:10,1:10] # numbers are how many times the term/word appeared in each tweet
-#tdm <- tdm[rowSums(tdm) > 50, ] # reduce size of the space to keep terms that show up at least X number of times across all tweets to make a more interpretable network (below) - if don't do this row, then it will be a very busy/messy network that's hard to read - further, we are only looking at more frequently occurring terms suggesting greater importance
+tdm[1:10,1:10] 
 
-# Network of terms
-# some times val more than 1 because it appeared multiple times in a single tweet
 # convert to only boolean
 tdm[tdm > 1] <- 1 
 
-termM <- tdm %*% t(tdm) # term-term matrix - each term is on rows and columns - to show combinations of words in different tweets; this takes some time
+termM <- tdm %*% t(tdm) 
 termM[1:10,1:10]
 
-# build the graph for month 1
+# build
 g <- graph.adjacency(termM, 
                             weighted = TRUE, 
-                            mode = "undirected") # don't specify the direction from node to node
+                            mode = "undirected")
 g <- simplify(g)
 
-# labels: V = vertices --> indicate label to be the name
+# labels
 V(g)$label <- V(g)$name
 V(g)$label
 
-V(g)$degree <- degree(g) # number of connections between terms - how often each term combination has appeared
+V(g)$degree <- degree(g) 
 V(g)$degree
 
 # Histogram of node degree
-# most of the time the degree is on the lower side
 qplot(as.numeric(V(g)$degree), 
      geom = "histogram",
       alpha = 0.8) +
@@ -652,7 +664,7 @@ qplot(as.numeric(V(g)$degree),
   theme(legend.position = "none")
 
 
-# color by month; full with node importance
+# color by month
 coords <- layout.fruchterman.reingold(g)
 V(g)$label.cex <- 2.2*V(g)$degree / max(V(g)$degree) + 0.6
 plot(g,
@@ -660,37 +672,27 @@ plot(g,
      vertex.color = full$month,
      vertex.size = 2,
      vertex.label.dist = 1.5,
-     main = "Google Search Queries Related to 'coronavirus'\nJanuary 2020 - July 2020")
+     main = "Google Search Queries Related to 'coronavirus'\nJanuary 2020 - August 2020")
 
 
-#
-# a closer look at grouping patterns in related search queries with community detection algorithms
-
-# first, edge betweenness; dense regions mean a community
+## closer look at grouping patterns in related search queries with community detection algorithms
+# edge betweenness
 comm <- cluster_edge_betweenness(g)
-
-# another approach is using propogating labels
-prop <- cluster_label_prop(g)
-
-# another approach is using greedy optimization of modularity - seems to pick up the natural grouping the best
-greed <- cluster_fast_greedy(as.undirected(g))
-
-# check out memebrships to see different results
-## edge-betweenness
-table(comm$membership) 
+table(comm$membership)
 length(unique(comm$membership)) 
 
-## prop labels
+# propogating labels
+prop <- cluster_label_prop(g)
 table(prop$membership)
 length(unique(prop$membership)) 
 
-## greedy optimization
+# greedy optimization of modularity
+greed <- cluster_fast_greedy(as.undirected(g))
 table(greed$membership)
 length(unique(greed$membership)) 
 
 
-## Plot all four (withOUT labels):
-## first - base structure (with no labels to get a sense of the raw space)
+## Plot all four
 coords <- layout.fruchterman.reingold(g)
 {
 par(mfrow = c(2,2))
