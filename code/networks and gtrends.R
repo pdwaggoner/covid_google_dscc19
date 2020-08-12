@@ -27,6 +27,28 @@ covid_trends %>%
        y = "Relative Interest") +
   theme_minimal()
 
+# --> adding COVID[-19] to see if a major difference? (takes a few minutes to run)
+covid_trends2 <- gtrends(keyword = c("coronavirus", "COVID", "COVID-19"), 
+                        geo = "US", 
+                        gprop = "web",
+                        time = "2019-12-01 2020-08-11")[[1]] %>% 
+  mutate(hits = replace(hits, hits < 0, 0)) 
+
+
+# viz
+covid_trends2 %>% 
+  ggplot(aes(x = date, 
+             y = as.numeric(hits), 
+             group = keyword, 
+             col = keyword)) +
+  geom_line() + 
+  labs(title = "Google Trends Web Searches for 'coronavirus', 'COVID', and 'COVID-19'", 
+       subtitle = "December 2019 - August 2020", 
+       x = "Time", 
+       y = "Relative Interest") +
+  theme_minimal()
+
+
 # original search (not a df)
 covid_trends_narrow <- gtrends(keyword = "coronavirus", 
                                                geo = "US", 
