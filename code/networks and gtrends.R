@@ -436,17 +436,18 @@ set.seed(1234)
   cleanset <- tm_map(cleanset, stripWhitespace)
 }
 
+# create TDM
 tdm <- TermDocumentMatrix(cleanset)
 tdm <- as.matrix(tdm)
 
 # inspect first 10 rows and first 10 columns
 tdm[1:10,1:10] 
 
-# convert to only boolean
+# convert to only boolean and create TTM
 tdm[tdm > 1] <- 1 
 termM <- tdm %*% t(tdm) 
 
-# build the graph for month 1
+# final convert to A matrix, then build the graph for month 1
 g_month1 <- graph.adjacency(termM, 
                      weighted = TRUE, 
                      mode = "undirected") 
