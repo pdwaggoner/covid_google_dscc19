@@ -440,10 +440,7 @@ set.seed(1234)
 tdm <- TermDocumentMatrix(cleanset)
 tdm <- as.matrix(tdm)
 
-# inspect first 10 rows and first 10 columns
-tdm[1:10,1:10] 
-
-# convert to only boolean and create TTM
+# convert to boolean (for A matrix below) and create TTM
 tdm[tdm > 1] <- 1 
 termM <- tdm %*% t(tdm) 
 
